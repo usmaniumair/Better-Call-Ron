@@ -104,36 +104,53 @@ TOOL_DEFS = [
     {
         "name": "research_and_email",
         "description": (
-            "Schedule live web research and email the caller a pack of curated, "
-            "authoritative resources for an INFORMATIONAL legal question that "
-            "does NOT require an attorney (e.g. tenant rights, small claims basics, "
-            "will templates). Use this instead of match_lawyers when the caller "
-            "wants to learn / DIY and is not in legal trouble. Available topic "
-            "slugs: ca_tenant. Research runs in the background and the email "
-            "arrives in 15-60 seconds; this call returns immediately with "
-            "{status: 'researching'}. After calling this, tell the caller you're "
-            "researching and the email will arrive shortly."
+            "Kick off dynamic web research for the caller's specific legal "
+            "situation and email them a pack of authoritative resources. Use "
+            "for any non-urgent caller after you've identified state + practice "
+            "area + a one-sentence summary of what's going on. The email arrives "
+            "in 15-60 seconds; this returns immediately with {status: 'researching'}. "
+            "After calling this, tell the caller you're emailing them resources "
+            "and ask if they also want to be matched with a lawyer."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "topic": {
+                "jurisdiction_state": {
+                    "type": "string",
+                    "description": "Two-letter US state code (e.g. CA, IL, NY).",
+                },
+                "practice_area": {
                     "type": "string",
                     "description": (
-                        "Resource pack slug. Available: ca_tenant (California "
-                        "landlord/tenant, security deposit, eviction, rent caps)."
+                        "Controlled vocab (same as match_lawyers): criminal_defense, "
+                        "dui, drug_offense, assault, domestic_violence, family, "
+                        "divorce, custody, immigration, immigration_detention, "
+                        "asylum, civil, business, estate, employment, "
+                        "personal_injury, landlord_tenant."
+                    ),
+                },
+                "situation_summary": {
+                    "type": "string",
+                    "description": (
+                        "One or two short sentences describing what's going on, "
+                        "in the caller's own framing. Used to focus the research."
                     ),
                 },
                 "email": {
                     "type": "string",
                     "description": (
-                        "Caller's email address. Use the `email` field returned "
-                        "by lookup_user. If lookup_user did not return one, ask "
-                        "the caller for their email before invoking this tool."
+                        "Caller's email address. Use the `email` field from the "
+                        "# Caller identity block or from lookup_user. If neither "
+                        "has an email, ask the caller before invoking this tool."
                     ),
                 },
             },
-            "required": ["topic", "email"],
+            "required": [
+                "jurisdiction_state",
+                "practice_area",
+                "situation_summary",
+                "email",
+            ],
         },
     },
     {
@@ -213,6 +230,13 @@ TOOL_IMPLS = {
 }
 
 
+# Cache breakpoint on the final tool entry caches the entire tools array as one block.
+# Combined with the system-prompt cache below, this is ~8k tokens that stop being sent
+# cold on every turn of a call — the practical fix for the dead-air problem.
+_CACHED_TOOL_DEFS = [dict(t) for t in TOOL_DEFS]
+_CACHED_TOOL_DEFS[-1] = {**_CACHED_TOOL_DEFS[-1], "cache_control": {"type": "ephemeral"}}
+
+
 def _get_client() -> AsyncAnthropic:
     global _client
     if _client is None:
@@ -261,8 +285,8 @@ async def run_turn(
         iterations += 1
         resp = await client.messages.create(
             model=config.CLAUDE_MODEL,
-            system=system,
-            tools=TOOL_DEFS,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            tools=_CACHED_TOOL_DEFS,
             messages=messages,
             max_tokens=512,
         )
@@ -288,6 +312,8 @@ async def run_turn(
                 usage={
                     "input_tokens": getattr(resp.usage, "input_tokens", None),
                     "output_tokens": getattr(resp.usage, "output_tokens", None),
+                    "cache_read_input_tokens": getattr(resp.usage, "cache_read_input_tokens", None),
+                    "cache_creation_input_tokens": getattr(resp.usage, "cache_creation_input_tokens", None),
                 },
             )
 

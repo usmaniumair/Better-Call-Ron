@@ -96,21 +96,25 @@ def test_research_and_email_returns_researching_immediately():
     """The sync entry point schedules background work and returns immediately."""
     # No event loop running, no background task scheduled — but the contract
     # (return shape) is the same. Tool result tells Ron to say "researching".
-    result = tools.research_and_email(topic="ca_tenant", email="caller@example.com")
+    result = tools.research_and_email(
+        jurisdiction_state="CA",
+        practice_area="landlord_tenant",
+        situation_summary="My landlord is withholding my security deposit.",
+        email="caller@example.com",
+    )
     assert result["status"] == "researching"
-    assert result["topic"] == "ca_tenant"
     assert result["to"] == "caller@example.com"
-
-
-def test_research_and_email_returns_error_for_unknown_topic():
-    result = tools.research_and_email(topic="zzz_nonexistent", email="x@example.com")
-    assert result["error"] == "unknown_topic"
-    assert result["topic"] == "zzz_nonexistent"
-    assert "ca_tenant" in result["available"]
+    assert result["jurisdiction_state"] == "CA"
+    assert result["practice_area"] == "landlord_tenant"
 
 
 def test_research_and_email_returns_error_when_email_missing():
-    result = tools.research_and_email(topic="ca_tenant", email="")
+    result = tools.research_and_email(
+        jurisdiction_state="CA",
+        practice_area="landlord_tenant",
+        situation_summary="Deposit withheld.",
+        email="",
+    )
     assert result == {"error": "no_email_provided"}
 
 
@@ -136,18 +140,30 @@ def test_do_research_and_email_uses_browser_use_when_configured(monkeypatch):
     monkeypatch.setattr(tools.browseruse_client, "research", fake_research)
     monkeypatch.setattr(tools.agentmail_client, "send_email", capture)
 
-    asyncio.run(tools._do_research_and_email("ca_tenant", "caller@example.com"))
+    asyncio.run(
+        tools._do_research_and_email(
+            jurisdiction_state="CA",
+            practice_area="landlord_tenant",
+            situation_summary="Landlord won't return deposit after 60 days.",
+            email="caller@example.com",
+        )
+    )
 
-    # browser-use was called with the topic's research prompt
-    assert "California Attorney General" in captured_task["task"]
-    # The email body wraps the research output plus the UPL disclaimer
+    # browser-use was called with a per-case prompt built from the inputs.
+    task = captured_task["task"]
+    assert "CA" in task
+    assert "landlord tenant" in task  # underscores stripped for prose
+    assert "Landlord won't return deposit" in task
+    # The email body wraps the research output plus the UPL disclaimer.
     assert "Found 3 official sources" in captured_email["text"]
     assert "not a lawyer" in captured_email["text"]
     assert captured_email["to"] == "caller@example.com"
+    # Subject reflects the practice area in human-readable form.
+    assert "landlord tenant" in captured_email["subject"]
 
 
-def test_do_research_and_email_falls_back_to_curated_when_no_api_key(monkeypatch):
-    """When BROWSER_USE_API_KEY is missing, the curated pack is sent instead."""
+def test_do_research_and_email_falls_back_to_generic_when_no_api_key(monkeypatch):
+    """When BROWSER_USE_API_KEY is missing, the generic-US fallback email is sent."""
     import asyncio
 
     monkeypatch.delenv("BROWSER_USE_API_KEY", raising=False)
@@ -164,16 +180,23 @@ def test_do_research_and_email_falls_back_to_curated_when_no_api_key(monkeypatch
     monkeypatch.setattr(tools.browseruse_client, "research", boom)
     monkeypatch.setattr(tools.agentmail_client, "send_email", capture)
 
-    asyncio.run(tools._do_research_and_email("ca_tenant", "caller@example.com"))
+    asyncio.run(
+        tools._do_research_and_email(
+            jurisdiction_state="CA",
+            practice_area="landlord_tenant",
+            situation_summary="Deposit withheld.",
+            email="caller@example.com",
+        )
+    )
 
-    # Curated pack was sent
-    assert "oag.ca.gov" in captured["text"]
-    assert "courts.ca.gov" in captured["text"]
+    # Generic-US fallback sent — universal pointers, jurisdiction-agnostic.
+    assert "americanbar.org" in captured["text"]
+    assert "usa.gov/legal-aid" in captured["text"]
     assert "not a lawyer" in captured["text"]
 
 
-def test_do_research_and_email_falls_back_to_curated_on_browser_use_error(monkeypatch):
-    """When browser-use raises, the curated pack is sent so the caller still gets something."""
+def test_do_research_and_email_falls_back_to_generic_on_browser_use_error(monkeypatch):
+    """When browser-use raises, the generic-US fallback is sent so the caller still gets something."""
     import asyncio
 
     monkeypatch.setenv("BROWSER_USE_API_KEY", "test_key")
@@ -190,10 +213,18 @@ def test_do_research_and_email_falls_back_to_curated_on_browser_use_error(monkey
     monkeypatch.setattr(tools.browseruse_client, "research", boom)
     monkeypatch.setattr(tools.agentmail_client, "send_email", capture)
 
-    asyncio.run(tools._do_research_and_email("ca_tenant", "caller@example.com"))
+    asyncio.run(
+        tools._do_research_and_email(
+            jurisdiction_state="IL",
+            practice_area="divorce",
+            situation_summary="Considering filing for divorce.",
+            email="caller@example.com",
+        )
+    )
 
-    # Fallback fired
-    assert "oag.ca.gov" in captured["text"]
+    # Fallback fired with the universal pointers.
+    assert "americanbar.org" in captured["text"]
+    assert "usa.gov/legal-aid" in captured["text"]
 
 
 def test_end_call_returns_hangup_action():

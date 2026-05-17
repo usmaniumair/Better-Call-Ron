@@ -39,6 +39,13 @@ _DEBOUNCE_SECONDS = float(os.environ.get("RON_DEBOUNCE_SECONDS", "0.4"))
 _SEQ_COUNTER = itertools.count(1)
 LATEST_SEQ: dict[str, int] = {}
 
+# Once we return a transfer/hangup instruction to AgentPhone, suppress all
+# further webhook processing for this call. AgentPhone keeps firing STT
+# webhooks during the bridge handoff; without this latch, any subsequent
+# text-only response Ron generates can override the transfer instruction
+# (observed: bridge silently never fires, disconnectionReason=user_hangup).
+TRANSFERRED_CALLS: dict[str, str] = {}
+
 _PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
 
 # Ron's hardcoded opener (PRD FR-10). Returned without invoking Claude when
@@ -220,11 +227,21 @@ async def webhook(request: Request) -> dict:
             CALL_STATE.pop(call_id, None)
             LATEST_SEQ.pop(call_id, None)
             CALL_HISTORY.pop(call_id, None)
+            TRANSFERRED_CALLS.pop(call_id, None)
             return {}
 
     if event_name != "agent.message":
         _LOG.info("Ignoring unrecognized webhook event: %s", event_name)
         call_log.record(call_id, "unknown_event", event=event_name, data=data)
+        return {}
+
+    if call_id in TRANSFERRED_CALLS:
+        call_log.record(
+            call_id,
+            "post_transfer_webhook_suppressed",
+            event=event_name,
+            transferred_at=TRANSFERRED_CALLS[call_id],
+        )
         return {}
 
     transcript = _extract_transcript(data)
@@ -304,6 +321,7 @@ async def webhook(request: Request) -> dict:
 
         response: dict = {"text": text}
         if transfer:
+            TRANSFERRED_CALLS[call_id] = _now_iso()
             response.update(transfer)
         return response
 

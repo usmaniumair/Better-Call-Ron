@@ -107,11 +107,7 @@ def connect_to_lawyer(lawyer_id: str, caller_name: str, brief: str) -> dict:
     else:
         email_error = "no_email_on_record"
 
-    # DEMO MODE: route every connect to DISPATCHER_PHONE (founder's phone)
-    # instead of the lawyer's number. Lets you demonstrate a working transfer
-    # without depending on each seed lawyer's phone being reachable. The email
-    # still goes to the lawyer's email address per the seed.
-    transfer_to = require_env("DISPATCHER_PHONE")
+    transfer_to = lawyer.phone
     agentphone_client.set_transfer_number(transfer_to)
 
     result: dict = {
@@ -126,11 +122,9 @@ def connect_to_lawyer(lawyer_id: str, caller_name: str, brief: str) -> dict:
     return result
 
 
-# Browser Use research-task prompts, per topic. These are the natural-language
-# instructions sent to browser-use cloud to do live research. Each one must:
-#   - target authoritative sources only (.gov, courts, official AG pages, vetted legal aid)
-#   - return the URL + a short summary so the caller can read further
-#   - NEVER ask the agent to interpret what the caller should do (UPL safety)
+# Output-format rules appended to every BrowserUse task prompt. Keeps the
+# returned text email-ready (no preamble, no meta-commentary) and UPL-safe
+# (summarize, don't advise).
 _RESEARCH_OUTPUT_RULES = (
     "OUTPUT FORMAT — STRICT:\n"
     "Your entire response MUST be only the plain-text email body, ready to send as-is.\n"
@@ -153,96 +147,6 @@ _RESEARCH_OUTPUT_RULES = (
 )
 
 
-_RESEARCH_TASKS = {
-    "ca_tenant": (
-        "Visit the California Attorney General page on landlord-tenant issues "
-        "(https://oag.ca.gov/consumers/general/landlord-tenant-issues), the California "
-        "Courts Self-Help Center for landlord-tenant matters "
-        "(https://www.courts.ca.gov/selfhelp-landtenant.htm), and the official page on "
-        "California Civil Code §1950.5 (security deposit return rules — 21-day window, "
-        "itemized statement). For each, extract the page URL and 2-3 plain-English bullet "
-        "points covering the key rules a tenant should know. Also find one URL for free "
-        "legal aid in California (e.g. LawHelpCA).\n\n" + _RESEARCH_OUTPUT_RULES
-    ),
-    "il_tenant": (
-        "Visit the Illinois Attorney General page on landlord-tenant rights, the Illinois "
-        "Legal Aid Online landlord-tenant section (https://www.illinoislegalaid.org/), and "
-        "any official page covering the Illinois Security Deposit Return Act (765 ILCS 710) "
-        "and Security Deposit Interest Act (765 ILCS 715) — deposit return timing (typically "
-        "30-45 days) and itemization rules. For Cook County / Chicago specifically, also "
-        "find the Chicago Residential Landlord and Tenant Ordinance (RLTO) page. For each "
-        "source, extract the page URL and 2-3 plain-English bullet points covering the key "
-        "rules a tenant should know.\n\n" + _RESEARCH_OUTPUT_RULES
-    ),
-}
-
-
-# Curated, authoritative resource packs per topic. Used as a FALLBACK when
-# browser-use is unconfigured, times out, or errors — so the caller always
-# gets a usable email. Sources are .gov, official court self-help portals,
-# and vetted legal aid only, so Ron is providing resources (UPL-safe).
-_RESOURCE_PACKS = {
-    "ca_tenant": {
-        "subject": "California tenant resources from Better Call Ron",
-        "body": (
-            "Here are official resources for your California housing matter. These come "
-            "from the California Attorney General, the courts, and vetted legal aid "
-            "organizations.\n"
-            "\n"
-            "— California Attorney General — Tenants' Rights overview:\n"
-            "  https://oag.ca.gov/consumers/general/landlord-tenant-issues\n"
-            "\n"
-            "— California Courts — Landlord/Tenant Self-Help Center:\n"
-            "  https://www.courts.ca.gov/selfhelp-landtenant.htm\n"
-            "\n"
-            "— Tenant Protection Act of 2019 (rent caps, just-cause eviction):\n"
-            "  https://landlordtenant.dre.ca.gov/tenant/protection_act.html\n"
-            "\n"
-            "— Security deposit rules (CA Civil Code §1950.5 — landlord must return\n"
-            "  itemized deposit within 21 days):\n"
-            "  https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1950.5.&lawCode=CIV\n"
-            "\n"
-            "— Free legal help by county (LawHelpCA):\n"
-            "  https://www.lawhelpca.org/\n"
-            "\n"
-            "I'm Ron — I'm not a lawyer, and I can't tell you which of these applies "
-            "to your specific situation. If after reading through these you still want "
-            "to talk to an attorney, call back and I'll match you with one.\n"
-            "\n"
-            "— Ron, Better Call Ron"
-        ),
-    },
-    "il_tenant": {
-        "subject": "Illinois tenant resources from Better Call Ron",
-        "body": (
-            "Here are official resources for your Illinois housing matter. These come "
-            "from Illinois Legal Aid Online, the Illinois Attorney General, and the "
-            "Chicago RLTO where applicable.\n"
-            "\n"
-            "— Illinois Legal Aid Online — Housing section:\n"
-            "  https://www.illinoislegalaid.org/legal-information/housing\n"
-            "\n"
-            "— Illinois Attorney General — Tenants' Rights handbook:\n"
-            "  https://www.illinoisattorneygeneral.gov/Page-Attachments/Tenants_Rights_Handbook.pdf\n"
-            "\n"
-            "— Illinois Security Deposit Return Act (765 ILCS 710 — return timing\n"
-            "  and itemized deductions):\n"
-            "  https://www.ilga.gov/legislation/ilcs/ilcs3.asp?ActID=2208\n"
-            "\n"
-            "— Chicago Residential Landlord and Tenant Ordinance (RLTO — applies\n"
-            "  to most rentals in Chicago / Cook County):\n"
-            "  https://www.chicago.gov/city/en/depts/doh/provdrs/landlords/svcs/rlto.html\n"
-            "\n"
-            "I'm Ron — I'm not a lawyer, and I can't tell you which of these applies "
-            "to your specific situation. If after reading through these you still want "
-            "to talk to an attorney, call back and I'll match you with one.\n"
-            "\n"
-            "— Ron, Better Call Ron"
-        ),
-    },
-}
-
-
 _UPL_FOOTER = (
     "\n\nI'm Ron — I'm not a lawyer, and I can't tell you which of these applies "
     "to your specific situation. If after reading through these you still want "
@@ -251,69 +155,123 @@ _UPL_FOOTER = (
 )
 
 
-def _send_curated_fallback(topic: str, email: str, reason: str) -> None:
-    """Send the static curated pack for `topic`. Used when browser-use is unavailable."""
-    pack = _RESOURCE_PACKS.get(topic)
-    if not pack:
-        _LOG.warning("no curated fallback for topic=%s (reason=%s)", topic, reason)
-        return
+# Jurisdiction-agnostic last-resort email used when BrowserUse can't run
+# (no API key, error, timeout, empty result). Two universal US pointers
+# only — not per-topic sample data.
+_GENERIC_FALLBACK_BODY = (
+    "I wasn't able to pull jurisdiction-specific resources for you this time, "
+    "but here are two national starting points:\n"
+    "\n"
+    "— American Bar Association — Find Legal Help:\n"
+    "  https://www.americanbar.org/groups/legal_services/flh-home/\n"
+    "  - Directory of free and reduced-cost legal aid by state and topic.\n"
+    "\n"
+    "— USA.gov — Legal Aid:\n"
+    "  https://www.usa.gov/legal-aid\n"
+    "  - Federal portal that points to your state's official legal aid programs."
+)
+
+
+def _build_research_prompt(
+    jurisdiction_state: str, practice_area: str, situation_summary: str
+) -> str:
+    """Compose a BrowserUse task prompt tailored to one caller's case."""
+    area = practice_area.replace("_", " ")
+    return (
+        f"Research authoritative legal resources in {jurisdiction_state} for a "
+        f"{area} matter. The caller's situation: {situation_summary}\n\n"
+        f"Target official and vetted sources only:\n"
+        f"- The {jurisdiction_state} Attorney General's relevant consumer/legal page\n"
+        f"- {jurisdiction_state} court self-help portal pages on this topic\n"
+        f"- The {jurisdiction_state} State Bar lawyer-referral service\n"
+        f"- Vetted statewide legal aid (e.g. LawHelp{jurisdiction_state}, statewide aid orgs)\n"
+        f"- Any directly-relevant {jurisdiction_state} statute or code section\n\n"
+        f"Aim for 3-5 sources total. For each, return the working page URL and "
+        f"2-3 plain-English bullets summarizing the key points relevant to the "
+        f"caller's situation. Skip Wikipedia and commercial law-firm pages.\n\n"
+        + _RESEARCH_OUTPUT_RULES
+    )
+
+
+def _send_generic_fallback(email: str, reason: str) -> None:
+    """Send the jurisdiction-agnostic fallback email when BrowserUse can't deliver."""
+    subject = "Legal resources from Better Call Ron"
+    body = _GENERIC_FALLBACK_BODY + _UPL_FOOTER
     try:
-        agentmail_client.send_email(to=email, subject=pack["subject"], text=pack["body"])
-        _LOG.info("sent curated fallback to=%s topic=%s reason=%s", email, topic, reason)
+        agentmail_client.send_email(to=email, subject=subject, text=body)
+        _LOG.info("sent generic fallback to=%s reason=%s", email, reason)
     except Exception:
-        _LOG.exception("curated fallback send failed to=%s topic=%s", email, topic)
+        _LOG.exception("generic fallback send failed to=%s", email)
 
 
-async def _do_research_and_email(topic: str, email: str) -> None:
-    """Async worker: run browser-use, email the result, fall back on any failure.
+async def _do_research_and_email(
+    jurisdiction_state: str,
+    practice_area: str,
+    situation_summary: str,
+    email: str,
+) -> None:
+    """Async worker: run browser-use for the caller's specific case, email the result.
 
     Tests call this directly (with browseruse_client.research monkeypatched).
     Production calls it via asyncio.create_task from research_and_email.
     """
-    task_prompt = _RESEARCH_TASKS.get(topic)
-    if not task_prompt or not browseruse_client.is_configured():
-        _send_curated_fallback(topic, email, reason="no_task_or_no_api_key")
+    if not browseruse_client.is_configured():
+        _send_generic_fallback(email, reason="no_api_key")
         return
 
+    prompt = _build_research_prompt(jurisdiction_state, practice_area, situation_summary)
     try:
-        output = await browseruse_client.research(task_prompt)
+        output = await browseruse_client.research(prompt)
     except Exception:
-        _LOG.exception("browser-use research failed for topic=%s; sending curated fallback", topic)
-        _send_curated_fallback(topic, email, reason="browser_use_error")
+        _LOG.exception(
+            "browser-use research failed for state=%s area=%s; sending generic fallback",
+            jurisdiction_state,
+            practice_area,
+        )
+        _send_generic_fallback(email, reason="browser_use_error")
         return
 
-    subject = f"Your {topic.replace('_', ' ')} research from Better Call Ron"
+    area = practice_area.replace("_", " ")
+    subject = f"Your {area} resources from Better Call Ron"
     body = output + _UPL_FOOTER
     try:
         agentmail_client.send_email(to=email, subject=subject, text=body)
-        _LOG.info("sent browser-use research to=%s topic=%s", email, topic)
+        _LOG.info(
+            "sent browser-use research to=%s state=%s area=%s",
+            email,
+            jurisdiction_state,
+            practice_area,
+        )
     except Exception:
-        _LOG.exception("send_email failed after research; trying curated fallback")
-        _send_curated_fallback(topic, email, reason="send_failed")
+        _LOG.exception("send_email failed after research; trying generic fallback")
+        _send_generic_fallback(email, reason="send_failed")
 
 
-def research_and_email(topic: str, email: str) -> dict:
-    """Schedule async research-and-email for an informational topic.
+def research_and_email(
+    jurisdiction_state: str,
+    practice_area: str,
+    situation_summary: str,
+    email: str,
+) -> dict:
+    """Schedule async per-case research-and-email.
 
     Browser-use tasks take 15-60s, which would time out the webhook if run
     synchronously. Instead we schedule a background task and return immediately
     so Ron can tell the caller "researching now — will email shortly".
 
     If browser-use is unconfigured, errors, or times out, the background task
-    falls back to a curated static resource pack so the caller never gets
+    falls back to a tiny jurisdiction-agnostic email so the caller never gets
     nothing.
     """
     if not email:
         return {"error": "no_email_provided"}
-    if topic not in _RESEARCH_TASKS and topic not in _RESOURCE_PACKS:
-        return {
-            "error": "unknown_topic",
-            "topic": topic,
-            "available": sorted(set(_RESEARCH_TASKS) | set(_RESOURCE_PACKS)),
-        }
 
     try:
-        asyncio.get_running_loop().create_task(_do_research_and_email(topic, email))
+        asyncio.get_running_loop().create_task(
+            _do_research_and_email(
+                jurisdiction_state, practice_area, situation_summary, email
+            )
+        )
     except RuntimeError:
         # No running loop (e.g. invoked from a test without asyncio.run). Caller
         # should await _do_research_and_email directly in that context.
@@ -322,7 +280,13 @@ def research_and_email(topic: str, email: str) -> dict:
             "background task not scheduled. Call _do_research_and_email directly."
         )
 
-    return {"status": "researching", "topic": topic, "to": email, "eta_seconds": 60}
+    return {
+        "status": "researching",
+        "to": email,
+        "jurisdiction_state": jurisdiction_state,
+        "practice_area": practice_area,
+        "eta_seconds": 60,
+    }
 
 
 def escalate_to_human(reason: str) -> dict:
