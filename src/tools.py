@@ -107,11 +107,18 @@ def connect_to_lawyer(lawyer_id: str, caller_name: str, brief: str) -> dict:
     else:
         email_error = "no_email_on_record"
 
+    # Set the agent's transfer_number BEFORE returning the webhook response.
+    # AgentPhone reads transferNumber from the agent record at bridge time —
+    # NOT from the webhook response (per agentphone.ai docs). The response
+    # must contain only {"text": ..., "action": "transfer"} for the bridge
+    # to fire; including a `transferNumber` field is undocumented and may
+    # cause the response to be silently rejected.
     transfer_to = lawyer.phone
     agentphone_client.set_transfer_number(transfer_to)
 
     result: dict = {
-        "transfer": {"action": "transfer", "transferNumber": transfer_to},
+        "transfer": {"action": "transfer"},
+        "transfer_number_set_to": transfer_to,
         "lawyer_name": lawyer.name,
         "email_sent": email_sent,
         "brief": brief,
@@ -293,7 +300,8 @@ def escalate_to_human(reason: str) -> dict:
     dispatcher = require_env("DISPATCHER_PHONE")
     agentphone_client.set_transfer_number(dispatcher)
     return {
-        "transfer": {"action": "transfer", "transferNumber": dispatcher},
+        "transfer": {"action": "transfer"},
+        "transfer_number_set_to": dispatcher,
         "reason": reason,
     }
 
@@ -317,6 +325,7 @@ def route_to_public_defender(reason: str) -> dict:
     pd = require_env("PUBLIC_DEFENDER_HOTLINE")
     agentphone_client.set_transfer_number(pd)
     return {
-        "transfer": {"action": "transfer", "transferNumber": pd},
+        "transfer": {"action": "transfer"},
+        "transfer_number_set_to": pd,
         "reason": reason,
     }

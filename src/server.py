@@ -270,6 +270,21 @@ async def webhook(request: Request) -> dict:
         if LATEST_SEQ.get(call_id) != my_seq:
             return {}
 
+        # Also re-check the transfer latch — `connect_to_lawyer` (or any
+        # other transfer tool) may have fired in a prior turn that was
+        # holding this lock while our webhook was waiting. Without this
+        # re-check, a post-transfer "Yes, please." webhook can slip through,
+        # generate a stray text response, and AgentPhone may abort the
+        # in-flight bridge.
+        if call_id in TRANSFERRED_CALLS:
+            call_log.record(
+                call_id,
+                "post_transfer_webhook_suppressed_late",
+                event=event_name,
+                transferred_at=TRANSFERRED_CALLS[call_id],
+            )
+            return {}
+
         msgs = CALL_STATE.setdefault(call_id, [])
 
         # Only the very first user turn needs the caller-phone prefix so the

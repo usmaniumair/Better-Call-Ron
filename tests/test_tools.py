@@ -59,8 +59,11 @@ def test_connect_to_lawyer_returns_email_error_when_send_fails(monkeypatch):
     )
 
     # Transfer must still be returned per NFR-6 even when email fails.
-    assert result["transfer"]["action"] == "transfer"
-    assert result["transfer"]["transferNumber"]  # whatever the lawyer's phone is
+    # AgentPhone reads the destination number from the agent record (set via
+    # agentphone_client.set_transfer_number), so the response only carries
+    # {"action": "transfer"}. The number actually set is exposed for logging.
+    assert result["transfer"] == {"action": "transfer"}
+    assert result["transfer_number_set_to"]  # whatever the lawyer's phone is
     assert result["email_sent"] is False
     assert "agentmail offline" in result["email_error"]
     # Lawyer name comes from the seed; just verify it's set rather than hardcoding.
@@ -236,8 +239,10 @@ def test_end_call_returns_hangup_action():
 def test_route_to_public_defender_returns_transfer_to_hotline(monkeypatch):
     monkeypatch.setenv("PUBLIC_DEFENDER_HOTLINE", "+15555550911")
     result = route_to_public_defender(reason="unknown_caller")
-    assert result["transfer"]["action"] == "transfer"
-    assert result["transfer"]["transferNumber"] == "+15555550911"
+    assert result["transfer"] == {"action": "transfer"}
+    # Number is set on the agent record via set_transfer_number; surfaced
+    # in the tool result for logging.
+    assert result["transfer_number_set_to"] == "+15555550911"
     assert result["reason"] == "unknown_caller"
 
 

@@ -317,6 +317,15 @@ async def run_turn(
                 },
             )
 
+        # Defend against the rare case where the model returns
+        # stop_reason="tool_use" but emits no actual tool_use blocks (just
+        # text). Without this guard we'd append {"role": "user", "content": []}
+        # and the next API call fails with 400 "user messages must have
+        # non-empty content", stalling the call until AgentPhone times it out.
+        if resp.stop_reason == "tool_use" and not iter_tools:
+            combined = " ".join(t.strip() for t in text_chunks if t.strip())
+            return combined, pending_transfer
+
         if resp.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": resp.content})
             tool_results = []
