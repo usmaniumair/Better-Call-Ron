@@ -1,0 +1,39 @@
+[project]
+name = "better-call-ron"
+version = "0.1.0"
+description = "Voice-first AI lawyer concierge built on AgentPhone + Claude. YC All My Agents hackathon."
+requires-python = ">=3.11"
+dependencies = [
+  "agentphone",
+  "agentmail",
+  "browser-use-sdk",
+  "anthropic>=0.40",
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic>=2",
+  "python-dotenv",
+  "httpx",
+  "websockets",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio",
+  "ruff",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "agentphone": {
+      "source": "AgentPhone-AI/skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "f3d1f59664497fcba574b612365b15f7072342d895995e2b0aad196047ec2948"
+    }
+  }
+}

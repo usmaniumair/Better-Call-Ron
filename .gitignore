@@ -1,0 +1,52 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Recordings / large media (keep assets/ in tree but ignore raw captures)
+*.mov
+*.mp4.tmp
+
+# Local logs
+*.log
+logs/
+
+# Per-call JSON logs written by src/call_log.py — includes transcripts,
+# tool inputs/outputs, and PII (caller phones, names). Never commit.
+# `calls/` (bare) is a defensive catch-all in case the path is ever renamed.
+calls/
+data/calls/
+data/calls.backup*/
+
+# Coverage reports (pytest --cov)
+.coverage
+htmlcov/
+coverage.xml
+
+# Editor / scratch
+*.bak
+*~
+.#*
+tmp/
+scratch/

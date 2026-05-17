@@ -1,0 +1,50 @@
+[
+  {
+    "id": "u_001",
+    "name": "Umair Usmani",
+    "date_of_birth": "1999-12-14",
+    "phone_numbers": ["+12152982128"],
+    "email": "uausmani25@gmail.com",
+    "payment_method_token": "pm_mock_umair_001",
+    "emergency_contacts": [
+      {
+        "name": "Sara Usmani",
+        "relationship": "spouse",
+        "phone": "<+1XXXXXXXXXX_EMERGENCY_CONTACT>"
+      }
+    ],
+    "budget_max_hourly": 600,
+    "budget_max_retainer": 5000,
+    "preferred_language": "en",
+    "home_jurisdiction": {"state": "CA", "county": "San Francisco"},
+    "notes": "Primary demo user"
+  },
+  {
+    "id": "u_002",
+    "name": "Ibrahim Kamal",
+    "date_of_birth": "1988-07-12",
+    "phone_numbers": ["+15716662713"],
+    "email": "uausmani25@gmail.com",
+    "payment_method_token": "pm_mock_jordan_002",
+    "emergency_contacts": [],
+    "budget_max_hourly": 400,
+    "budget_max_retainer": 2000,
+    "preferred_language": "en",
+    "home_jurisdiction": {"state": "IL", "county": "Cook"},
+    "notes": "Non-urgent / shopper demo user"
+  },
+  {
+    "id": "u_003",
+    "name": "Maria Lopez",
+    "date_of_birth": "1992-11-30",
+    "phone_numbers": ["+12676016614"],
+    "email": "uausmani25@gmail.com",
+    "payment_method_token": "pm_mock_maria_003",
+    "emergency_contacts": [],
+    "budget_max_hourly": 350,
+    "budget_max_retainer": 2000,
+    "preferred_language": "es",
+    "home_jurisdiction": {"state": "CA", "county": "Alameda"},
+    "notes": "Primary demo user"
+  }
+]
