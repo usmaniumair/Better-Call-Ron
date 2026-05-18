@@ -2,10 +2,10 @@
 
 > *"Better Call Ron"* — a voice-first AI lawyer concierge. Brand name of the service; the agent itself is named **Ron** in the conversation.
 
-**Status:** Draft for Sunday 2026-05-17 hackathon build
+**Status:** Working end-to-end as of 2026-05-18 (verified live). Some FRs evolved past the 2026-05-15 draft — see § "What changed since draft" at the end.
 **Owner:** Umair
-**Last updated:** 2026-05-15
-**Required infrastructure:** [AgentPhone](https://agentphone.ai) (YC mandate for "All My Agents" hackathon)
+**Last updated:** 2026-05-18
+**Required infrastructure:** [AgentPhone](https://agentphone.ai) (YC mandate for "All My Agents" hackathon), plus AgentMail (lawyer-brief delivery) and BrowserUse (dynamic per-case research)
 
 ---
 
@@ -92,45 +92,63 @@ The default outcomes are: (a) take an over-burdened public defender, (b) burn th
 ### 5.1 Custody scenario (primary / demo)
 
 ```
-Caller (from jail phone, unknown number) -> dials concierge number
-Agent: "This is Ron. Are you safe right now?"
-Caller: "No, I've been arrested."
-Agent: "I don't recognize this number. What's your full name and date of birth?"
-Caller: "Umair Usmani, January 1st 1995."
-Agent: "Got it, I have your account. Where are you being held?"
-Caller: "Alameda County."
+Caller (from registered phone) -> dials concierge number
+Agent: "Hey, this is Ron. How can I help you?"
+Caller: "I just got arrested for DUI."
+Agent (identity already resolved from caller-ID): "Hey Umair. Where are you being held?"
+Caller: "Tenderloin Police Station, San Francisco."
 Agent: "What's the charge, if you know?"
 Caller: "DUI."
 Agent: "Have you seen a judge yet?"
-Caller: "No, just arrested."
-Agent: "I found Sarah Chen, criminal defense in Alameda County, available right now.
-        Texting her your situation now. Connecting in three seconds."
-[SMS sent to Sarah: "Umair Usmani, DUI arrest in Alameda County, not yet arraigned,
-                     retainer authorized. Connecting now."]
-[Cold transfer initiated to Sarah's number.]
-Sarah's phone: SMS arrives, then rings. Sarah answers already briefed.
+Caller: "No."
+Agent (BRIDGE — text + match_lawyers tool call in same turn):
+       "One sec — finding a DUI lawyer in San Francisco."
+[matcher cascade: county_relaxed -> Haris Jalal, criminal_defense/dui, Alameda]
+Agent: "Nothing in San Francisco. I found Haris Jalal, DUI in Alameda, available now.
+        Want me to get Haris on the line?"
+Caller: "Yes."
+Agent (CO-NARRATE — text + connect_to_lawyer + notify_emergency_contact in same turn):
+       "Briefing Haris now. Texting Sara to let her know. Connecting in three seconds.
+        Stay on the line."
+[Email sent to Haris with brief via AgentMail.]
+[SMS sent to Sara (caller's emergency contact) from the agent's SMS line.]
+[Webhook response to AgentPhone: {"text": "Briefing Haris now...", "action": "transfer"}.
+ Agent record's transfer_number was set to Haris's phone via API call right before.]
+[AgentPhone cold-transfers caller's leg to Haris's number.]
 ```
 
-### 5.2 Shopper scenario
+### 5.2 Shopper / non-urgent scenario
+
+Two-step: research email FIRST (always), then ask if they also want a lawyer.
 
 ```
-Caller (from own phone, calm) -> dials concierge number
-Agent: "This is Ron. Are you safe right now?"
-Caller: "Yes, I just need to find a lawyer."
-Agent: "Hi Umair. What kind of legal help do you need?"
-Caller: "I'm filing for divorce."
-Agent: "What state?"
+Caller (from registered phone) -> dials concierge number
+Agent: "Hey, this is Ron. How can I help you?"
+Caller: "I'm thinking about filing for divorce."
+Agent: "Hey Umair. What state?"
 Caller: "Illinois."
-Agent: "Is this urgent — today urgent — or planning ahead?"
-Caller: "Planning ahead."
-Agent: "I have three divorce attorneys in Cook County within your budget:
-        Lisa Wong at $400 per hour, Mark Davis with a $1500 flat consult,
-        and Priya Shah at $500 per hour with 20 years experience.
-        Who would you like to speak with?"
-Caller: "Lisa Wong."
-Agent: "Texting Lisa your situation now. Connecting."
-[SMS + cold transfer.]
+Agent: "In one sentence, what's going on?"
+Caller: "My wife and I are separating and I need to file for divorce."
+Agent (CO-NARRATE — text + research_and_email in same turn):
+       "Looking into Illinois divorce for you now. I'll email you the resources
+        in about a minute. Want me to also find you a lawyer?"
+[Background: BrowserUse runs a per-case research task, emails the resource pack
+ via AgentMail in 15-60s with state AG, court self-help, state bar, statewide
+ legal aid, and relevant statutes.]
+Caller: "Yeah."
+Agent (BRIDGE): "One sec — finding a divorce lawyer in Illinois."
+[match_lawyers(urgency="non_urgent") -> 3-5 IL divorce lawyers]
+Agent: "Here are three options:
+        1. Ibrahim Kamal, divorce, $250 consult.
+        2. Lisa Wong, divorce, $300 consult.
+        3. Priya Mehta, divorce, $500/hr.
+        Who do you want to go with?"
+Caller: "Ibrahim."
+Agent (CO-NARRATE): "Briefing Ibrahim now. Connecting in three seconds. Stay on the line."
+[Email to Ibrahim + cold transfer.]
 ```
+
+If the caller declines the lawyer ("No, I'll read first") → Ron fires `end_call(reason="caller_done")` with "Alright, good luck. Bye." The research email still arrives in their inbox 30s later.
 
 ### 5.3 Unknown-caller fallback
 
@@ -227,10 +245,10 @@ Agent: "I don't have a strong match in our network for you right now.
 
 ### 6.3 Triage
 
-- **FR-10:** Agent's opening utterance is the safety check: *"Are you safe right now?"*
-- **FR-11:** Agent classifies the call as **urgent** or **non-urgent** based on safety-check response and downstream practice-area extraction.
-- **FR-12:** Urgent path: agent collects location (→ jurisdiction), charge (→ practice area), and court status (*"Have you seen a judge yet?"*).
-- **FR-13:** Non-urgent path: agent collects need (→ practice area), state (→ jurisdiction), and urgency window.
+- **FR-10:** Agent's opening utterance is the concierge greeting: *"Hey, this is Ron. How can I help you?"* (Earlier draft used a "are you safe?" safety-check opener; changed to concierge tone because Better Call Ron is a marketplace, not a 911 service. Urgency is inferred from the caller's own words, not asked up front.)
+- **FR-11:** Agent classifies the call as **urgent** or **non-urgent** silently from the caller's first utterance — keywords like "arrested", "in jail", "in custody" → urgent; "thinking about", "planning", "looking for" → non-urgent. If genuinely ambiguous after the first turn, agent asks ONCE: *"Are you in trouble right now, or planning ahead?"*
+- **FR-12:** Urgent path: agent collects location (→ jurisdiction), charge (→ practice area), and court status (*"Have you seen a judge yet?"*). One question per turn. Skip any slot the caller already filled in their opening.
+- **FR-13:** Non-urgent path: agent collects practice area, state, and a one-sentence situation summary. ALWAYS fires `research_and_email` first (per-case BrowserUse research → email), then asks if the caller also wants to be matched with a lawyer. Only if yes → `match_lawyers` + readback + `connect_to_lawyer`.
 - **FR-14:** Agent does not ask about budget at call time. Budget is read from the user profile.
 
 ### 6.4 Matching
@@ -295,11 +313,13 @@ Matching runs in four stages: **strict hard filters → relaxation cascade (if z
 ### 6.6 Connection mechanic
 
 - **FR-26:** Before initiating transfer, agent calls `connect_to_lawyer` tool which:
-  1. Sends an SMS to the matched lawyer's phone with caller name, jurisdiction, practice area, urgency level, and (urgent only) court status. Stock format:
-     > *"Better Call Ron: {caller name}, {practice area} matter in {jurisdiction}. {Court status if urgent}. Retainer authorized. Connecting now."*
-  2. Returns the transfer instruction with the lawyer's phone number.
-- **FR-27:** Agent's next webhook response includes the AgentPhone transfer action with `transferNumber` set to the lawyer's number.
-- **FR-28:** Agent's spoken line immediately before transfer: *"Texting {name} now. Connecting in three seconds. Stay on the line."*
+  1. Sends an **email** (not SMS) to the matched lawyer's address via AgentMail with caller name, jurisdiction, practice area, urgency level, and (urgent only) court status. Stock body:
+     > *"{caller name}, {practice area} matter in {jurisdiction}. {Court status if urgent}. Retainer authorized."*
+  2. Sets the AgentPhone agent record's `transfer_number` field to the lawyer's phone via `c.agents.update(...)` API call. AgentPhone reads the destination from this field at bridge time.
+  3. Returns `{"transfer": {"action": "transfer"}}` (no `transferNumber` field — AgentPhone uses the agent record).
+- **FR-27:** Agent's webhook response is `{"text": "...", "action": "transfer"}` ONLY. **Do NOT include a `transferNumber` key in the response** — undocumented per AgentPhone's spec, observed to cause silent bridge drops. The destination comes from the agent record (FR-26 step 2).
+- **FR-28:** Agent's spoken line immediately before transfer is canonical: *"Briefing {name} now. Connecting in three seconds. Stay on the line."* On URGENT calls where the caller has an emergency contact on file, this is bundled in the SAME turn with a `notify_emergency_contact` tool call and an additional clause: *"Briefing {name} now. Texting {contact name} to let her know. Connecting in three seconds. Stay on the line."*
+- **FR-28a:** **`notify_emergency_contact` tool (URGENT-only).** When the caller's `# Caller identity` block lists one or more `emergency_contacts`, the agent fires `notify_emergency_contact(user_id, message)` in the SAME response as `connect_to_lawyer`. Sends SMS (or iMessage when the line is iMessage-capable) to each contact. Body: *"Hi, this is Ron from Better Call Ron. {caller} was just connected with attorney {lawyer name} on an urgent matter and asked me to text you. You'll hear from them as soon as they can call."* Skipped on non-urgent calls.
 
 ### 6.7 UPL guardrails
 
@@ -383,16 +403,23 @@ The agent has two distinct "give up" tools and they route to different numbers:
                         |  - Streaming reply          |
                         +--------------+--------------+
                                        |
-       +----------+----------+--------------+-------------+---------------+
-       |          |          |              |             |               |
-       v          v          v              v             v               v
- lookup_user  match_     connect_to_   escalate_to_  route_to_public_defender
-              lawyers    lawyer        human
-       |          |          |              |             |
-       v          v          v              v             v
- users.json  lawyers   AgentPhone    AgentPhone     AgentPhone transfer
-             .json     SMS + xfer    transfer to    to public-defender
-                       instruction   dispatcher     hotline (FR-9)
+       +----+------+-----------+------------------+--------+-----------+----------+-----------+
+       |    |      |           |                  |        |           |          |           |
+       v    v      v           v                  v        v           v          v           v
+ lookup_   match_  connect_   research_and_   notify_       end_   escalate_  route_to_public_
+   user   lawyers  to_lawyer  email           emergency_    call   to_human   defender
+                              (BrowserUse +   contact
+                              AgentMail)      (URGENT only;
+                                              SMS/iMessage
+                                              via AgentPhone)
+       |    |        |            |               |          |          |          |
+       v    v        v            v               v          v          v          v
+   users.  lawyers  AgentMail   BrowserUse +   AgentPhone  AgentPhone  AgentPhone  AgentPhone
+   json    .json    email +     AgentMail      messages    hangup      transfer →  transfer →
+                    AgentPhone  research                                dispatcher  PD hotline
+                    set_xfer    email                                              (FR-9)
+                    + action:
+                    transfer
 ```
 
 **Component responsibilities:**
@@ -402,8 +429,13 @@ The agent has two distinct "give up" tools and they route to different numbers:
 | AgentPhone | Audio in/out, transcription, TTS synthesis, SMS, cold transfer execution |
 | FastAPI webhook | Webhook ingress, signature verification, conversation state pass-through, WebSocket broadcast |
 | Claude (tool-use loop) | Triage extraction, dialogue policy, UPL refusal, tool selection |
-| `tools.py` | The five tool implementations as Python functions (`lookup_user`, `match_lawyers`, `connect_to_lawyer`, `escalate_to_human`, `route_to_public_defender`) |
-| `prompts.py` | System prompt encoding all flow rules |
+| `tools.py` | **Eight tool implementations** as Python functions: `lookup_user`, `match_lawyers`, `connect_to_lawyer`, `research_and_email` (dynamic per-case BrowserUse), `notify_emergency_contact` (URGENT-only SMS to caller's contacts), `end_call`, `escalate_to_human`, `route_to_public_defender` |
+| `prompts.py` | System prompt encoding all flow rules + BRIDGE/CO-NARRATE tool-discipline categories |
+| `claude_loop.py` | Claude tool-use loop with **ephemeral prompt caching** on system + tools (~8k tokens cache-hit per turn after the first); post-transfer text suppression |
+| `agentphone_client.py` | AgentPhone SDK wrapper: voice webhook signature, `set_transfer_number`, `send_sms` (pinned to a specific number via `AGENTPHONE_MESSAGING_NUMBER_ID`) |
+| `agentmail_client.py` | AgentMail SDK wrapper: lawyer-brief email send |
+| `browseruse_client.py` | BrowserUse SDK wrapper: async `research(task)` for dynamic per-case web research |
+| `call_log.py` | Per-call JSON event log (timestamped filenames in `data/calls/`); prior-call history lookup for repeat-caller personalization |
 | JSON files | User and lawyer state |
 | `transcript.html` | Read-only live transcript for stage projection |
 
@@ -554,6 +586,18 @@ RELAXATION_TIERS = [
 | uvicorn | ASGI server | latest stable |
 | ngrok (or equivalent) | Tunnel local webhook to public URL so AgentPhone can reach it | Free tier sufficient for demo |
 
+### 10.1 Software dependencies (updated)
+
+| Dependency | Purpose | Required version / notes |
+|---|---|---|
+| AgentPhone | Telephony, SMS/iMessage, transfer | Python SDK (`pip install agentphone`); REST API |
+| AgentMail | Lawyer-brief email | Python SDK (`pip install agentmail`) |
+| BrowserUse | Per-case dynamic legal research | Python SDK (`pip install browser-use-sdk`) — `AsyncBrowserUse` |
+| Anthropic Claude | LLM brain (tool use + prompt caching) | Claude Sonnet 4.6 default; Opus 4.7 fallback |
+| Python | Runtime | 3.11+ |
+| FastAPI / uvicorn | HTTP server | latest stable |
+| ngrok (or equivalent) | Tunnel local webhook to public URL so AgentPhone can reach it | Free tier sufficient for demo |
+
 ### 10.2 Configuration values (`.env`)
 
 | Variable | Purpose |
@@ -561,12 +605,17 @@ RELAXATION_TIERS = [
 | `AGENTPHONE_API_KEY` | Bearer token for AgentPhone REST API |
 | `AGENTPHONE_WEBHOOK_SECRET` | HMAC-SHA256 secret for verifying inbound webhook signatures (NFR-12) |
 | `AGENTPHONE_AGENT_ID` | Agent identifier on AgentPhone for our number |
-| `AGENTPHONE_INBOUND_NUMBER` | Our provisioned inbound number, used as caller-ID for outbound SMS |
+| `AGENTPHONE_INBOUND_NUMBER` | Our provisioned inbound voice number (informational; not used in routing logic) |
+| `AGENTPHONE_MESSAGING_NUMBER_ID` | Optional. Pins outbound `messages.send` (including `notify_emergency_contact`) to a specific attached `number_id`. Currently set to the SMS line so any recipient is reachable. Leave unset to let AgentPhone pick. |
 | `ANTHROPIC_API_KEY` | API key for Claude |
 | `CLAUDE_MODEL` | Default `claude-sonnet-4-6` (chosen for lower TTFT on voice turns). Fall back to `claude-opus-4-7` if dialogue quality becomes the bottleneck rather than latency. |
+| `AGENTMAIL_API_KEY` | API key for AgentMail (sends lawyer-brief emails on connect) |
+| `AGENTMAIL_INBOX_ID` | Optional. If unset, an inbox is created on first send and the id is logged so you can paste it back to reuse across restarts. |
+| `BROWSER_USE_API_KEY` | API key for BrowserUse cloud (powers `research_and_email`). When unset, `research_and_email` sends a small jurisdiction-agnostic fallback email instead of failing. |
 | `DISPATCHER_PHONE` | E.164 phone routed to when `escalate_to_human` fires (the founder's phone for the demo) |
 | `PUBLIC_DEFENDER_HOTLINE` | E.164 fallback number for callers with no matching account (FR-9) |
 | `WEBHOOK_PUBLIC_URL` | The ngrok URL exposing `/webhook` to AgentPhone |
+| `RON_DEBOUNCE_SECONDS` | Optional. Default 0.4. Per-call debounce window for AgentPhone STT refinement webhooks (multiple webhooks per utterance as STT converges). |
 
 ---
 
@@ -621,13 +670,29 @@ RELAXATION_TIERS = [
 
 ## 14. Open questions
 
-1. **`transferNumber` dynamics:** Can AgentPhone set the transfer target per webhook response, or only per-agent configuration? If only per-agent, the workaround is calling `client.agents.update(agent_id, transfer_number=...)` right before issuing the transfer action. **Needs investigation in SDK as first task Sunday (Phase 0.4).**
-2. **Voice webhook payload shape:** The AgentPhone SDK's `WebhookEventData` model is SMS-shaped (fields: `from`, `to`, `message`, `conversation_id`). Voice events seen in the wild appear to use `callId` / `transcript` keys that the SDK doesn't model. `server.py` runs a fallback chain (`callId` → `conversationId`; `message` → `transcript`) — verify the real key names against the first live inbound call on Sunday and tighten the parsing.
-3. **Response format — plain JSON vs NDJSON streaming (NFR-2):** Filler-chunk masking (NFR-2) is currently **deferred** pending live testing. Plain JSON `{"text": "..."}` is what the server returns today. If AgentPhone TTS waits on a single JSON body before speaking, latency on tool turns will be noticeable and we'll need to switch to `StreamingResponse` and emit an interim NDJSON chunk while Claude runs. Decide after the first live call.
-4. **Filler chunk timing:** (Subsumed by Q3 above; keep separate only if NDJSON path is required.) Does AgentPhone's NDJSON streaming start TTS on the first chunk reliably, or buffer?
-5. **Practice-area extraction from free text:** Should Claude do this in the same triage turn as data collection, or as a separate classification step? Hackathon scope suggests inline.
-6. **Lawyer SMS opt-in:** In a real product, lawyers must consent to receiving briefs via SMS. For the demo all "lawyers" are teammates so this is moot, but the PRD should note it for the post-hackathon backlog.
+1. **~~`transferNumber` dynamics~~** — RESOLVED 2026-05-17 via AgentPhone docs. The webhook response must contain ONLY `{"text": "...", "action": "transfer"}`. AgentPhone reads the destination from the agent record's `transfer_number` field, which `connect_to_lawyer` sets via `c.agents.update(...)` right before returning. Sending an extra `transferNumber` field in the webhook response causes silent bridge drops.
+2. **~~Voice webhook payload shape~~** — RESOLVED. Voice uses `data.callId` and `data.transcript` (not the SMS-shaped `conversation_id`/`message`). Fallback chain in `_extract_call_id` handles both. Known caveat: AgentPhone occasionally fires `agent.message` webhooks with empty `data.from` / missing `data.callId`; the metadata-extraction fallback collapses those into a shared bucket file. Not blocking for the demo (registered callers usually get correct metadata) but a known intermittent issue.
+3. **~~Response format — NDJSON streaming~~** — RESOLVED (deferred). Plain JSON `{"text": "..."}` is acceptable. Prompt caching (~8k system+tools cached per turn) brought TTFT into a workable range without streaming.
+4. **~~Filler chunk timing~~** — N/A (no NDJSON path).
+5. **~~Practice-area extraction~~** — Inline with triage, as expected.
+6. **Lawyer SMS opt-in:** In a real product, lawyers must consent to receiving briefs via email/SMS. For the demo all "lawyers" are teammates so this is moot, but stays in the post-hackathon backlog.
 7. **What happens if the caller's payment method is declined?** Out of scope for V1; mocked as always-authorized.
+8. **Shared-iMessage line outbound restrictions:** AgentPhone's `shared-imessage` line type can only send to pre-registered contacts (HTTP 403 on first-touch). Project uses the SMS line for `notify_emergency_contact` to avoid this. If/when blue-bubble delivery matters, register specific contacts on the iMessage line via dashboard.
+
+---
+
+## 16. What changed since the 2026-05-15 draft
+
+- **Opener** — was "Are you safe right now?", now "Hey, this is Ron. How can I help you?" (FR-10). Concierge tone, not 911.
+- **Non-urgent flow** — was a binary split between self-serve research and lawyer match. Now: ALWAYS research first (dynamic per-case BrowserUse), then ASK if the caller also wants a lawyer (FR-13).
+- **Lawyer brief delivery** — was SMS, now email via AgentMail (FR-26).
+- **Transfer mechanism** — was understood as inline `transferNumber` per webhook response, actually requires the agent record's `transfer_number` field set via API before returning `{"action": "transfer"}` (FR-26, FR-27).
+- **Tools** — was five, now eight: added `research_and_email` (dynamic per-case research with generic fallback), `notify_emergency_contact` (URGENT-only SMS to caller's emergency contacts), `end_call` (clean hangup for self-serve close-outs).
+- **Prompt** — added BRIDGE category for `lookup_user` / `match_lawyers` (short statement-of-action like "One sec — finding a DUI lawyer in SF." must accompany the tool_use). CO-NARRATE category covers `connect_to_lawyer`, `research_and_email`, `notify_emergency_contact`, `end_call`, `escalate_to_human`, `route_to_public_defender`.
+- **Caching** — Anthropic prompt caching wired with `cache_control: ephemeral` on system + tools (~8k tokens cached per turn after the first). Logged per iteration.
+- **Server hardening** — `TRANSFERRED_CALLS` latch suppresses post-transfer chatter; post-transfer text-accumulation suppression in the claude loop prevents duplicate "Briefing X now..." narration on two-tool turns.
+- **Call logs** — per-call JSON files in `data/calls/` are now timestamp-prefixed for chronological sort.
+- **Tests** — 53 passing (was 31 in original plan; added research dynamic-prompt tests, notify_emergency_contact tests, schema-vs-signature consistency checks).
 
 ---
 

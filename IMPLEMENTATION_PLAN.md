@@ -1,46 +1,57 @@
 # Better Call Ron — Implementation Plan
 
 **Companion to:** [PRD.md](./PRD.md)
-**Target:** working demo by Sunday 2026-05-17 evening
+**Status (2026-05-18):** All phases built and verified end-to-end live. The phase-by-phase build narrative below is a historical record of how it was built; the **Current state** section right below captures what's actually shipped. See PRD § 16 ("What changed since draft") for behavior changes.
 **Hackathon:** YC "All My Agents"
-
-This plan turns the PRD into an ordered, executable build path. Read it top-to-bottom on Sunday morning; you should be able to follow it without re-reading the PRD until the test step at the end of each phase.
 
 ---
 
-## Project layout
+## Current state (2026-05-18)
+
+- **53 tests passing.** `.venv/bin/pytest -v`.
+- **8 tools wired:** `lookup_user`, `match_lawyers`, `connect_to_lawyer`, `research_and_email`, `notify_emergency_contact`, `end_call`, `escalate_to_human`, `route_to_public_defender`.
+- **Verified live:** caller-ID identity resolution, urgent triage, matcher cascade, BrowserUse dynamic research, AgentMail lawyer-brief email, AgentPhone cold transfer, emergency-contact SMS, repeat-caller greeting.
+- **Prompt caching wired.** `cache_control: ephemeral` on system + tools — ~8k tokens cached per turn after the first. Cuts cold-turn latency from ~22s to ~4s.
+- **Transfer mechanic:** `{"text": "...", "action": "transfer"}` only in the webhook response; destination set on the agent record via `c.agents.update(transfer_number=lawyer.phone)` right before returning. Sending `transferNumber` in the response causes silent bridge drops — don't.
+
+## Project layout (actual)
 
 ```
 better-call-ron/
 ├── PRD.md
-├── IMPLEMENTATION_PLAN.md            # this file
-├── README.md                          # quick start for teammates
+├── IMPLEMENTATION_PLAN.md
+├── README.md
 ├── .env                               # local secrets (gitignored)
 ├── .env.example                       # template
 ├── .gitignore
-├── pyproject.toml                     # deps + entry point
+├── pyproject.toml
 ├── data/
-│   ├── users.json                     # 2-3 seeded user profiles
-│   └── lawyers.json                   # ~10 seeded lawyers (2 real-callable)
+│   ├── users.json                     # 3 seeded user profiles
+│   ├── lawyers.json                   # 10 seeded lawyers
+│   └── calls/                         # per-call JSON event logs (gitignored;
+│                                      #  timestamp-prefixed filenames)
 ├── src/
 │   ├── __init__.py
 │   ├── config.py                      # constants, weights, env-loading
-│   ├── schemas.py                     # pydantic models for User, Lawyer, ConvTurn
-│   ├── tools.py                       # the four agent tools
+│   ├── schemas.py                     # pydantic models (User, Lawyer, EmergencyContact, ...)
+│   ├── tools.py                       # 8 tool implementations
 │   ├── matcher.py                     # filter + cascade + score + floor
-│   ├── prompts.py                     # Claude system prompt
-│   ├── claude_loop.py                 # Claude tool-use loop per turn
-│   ├── agentphone_client.py           # thin wrapper over the SDK
-│   ├── server.py                      # FastAPI app: /webhook + /transcript WS
-│   └── transcript_bus.py              # in-process pub/sub for the transcript WS
+│   ├── prompts.py                     # Claude system prompt + BRIDGE/CO-NARRATE rules
+│   ├── claude_loop.py                 # Claude tool-use loop; prompt caching; post-transfer text suppression
+│   ├── agentphone_client.py           # AgentPhone SDK wrapper (voice webhook sig, set_transfer_number, send_sms)
+│   ├── agentmail_client.py            # AgentMail SDK wrapper (lawyer-brief email)
+│   ├── browseruse_client.py           # BrowserUse SDK wrapper (async research(task))
+│   ├── server.py                      # FastAPI app: /webhook, /transcript WS, TRANSFERRED_CALLS latch
+│   ├── transcript_bus.py              # in-process pub/sub for the transcript WS
+│   └── call_log.py                    # per-call JSON writer + repeat-caller history lookup
 ├── public/
 │   └── transcript.html                # one-page live transcript view
 ├── tests/
-│   ├── test_matcher.py                # matcher unit tests (deterministic)
-│   ├── test_tools.py                  # tools wrap behavior tests
+│   ├── test_matcher.py                # matcher cascade + scoring
+│   ├── test_tools.py                  # tool behaviors (including notify_emergency_contact, research)
+│   ├── test_claude_loop.py            # tool-def schema consistency vs Python signatures
+│   ├── test_signature.py              # AgentPhone HMAC verification regressions
 │   └── fixtures/
-│       ├── users.json
-│       └── lawyers.json
 └── assets/
     ├── signup-mockup.png              # Figma export for pitch slide
     └── backup-demo.mp4                # recorded fallback (filmed Sunday AM)
@@ -67,14 +78,16 @@ git init
 python -m venv .venv && source .venv/bin/activate
 ```
 
-`pyproject.toml`:
+`pyproject.toml` (actual):
 ```toml
 [project]
 name = "better-call-ron"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-  "agentphone",                # AgentPhone Python SDK
+  "agentphone",                # AgentPhone Python SDK (voice + SMS + iMessage)
+  "agentmail",                 # AgentMail SDK (lawyer-brief email on connect)
+  "browser-use-sdk",           # BrowserUse SDK (per-case dynamic research)
   "anthropic>=0.40",
   "fastapi",
   "uvicorn[standard]",
@@ -85,22 +98,40 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff"]
+dev = ["pytest>=8", "pytest-asyncio", "ruff"]
 ```
 
 `pip install -e ".[dev]"`
 
 `.env.example` (copy to `.env` and fill in):
 ```
+# AgentPhone (voice + SMS + iMessage)
 AGENTPHONE_API_KEY=
 AGENTPHONE_WEBHOOK_SECRET=
 AGENTPHONE_AGENT_ID=
 AGENTPHONE_INBOUND_NUMBER=+1XXXXXXXXXX
+# Optional: pin outbound `messages.send` to a specific attached number_id
+# (useful when one attached number is iMessage-only or 10DLC-cleaner than another).
+AGENTPHONE_MESSAGING_NUMBER_ID=
+
+# AgentMail (lawyer-brief email on connect)
+AGENTMAIL_API_KEY=
+AGENTMAIL_INBOX_ID=             # optional; created on first send if unset
+
+# BrowserUse (dynamic per-case research for non-urgent callers)
+BROWSER_USE_API_KEY=            # if unset, research_and_email sends a generic fallback email
+
+# Anthropic Claude
 ANTHROPIC_API_KEY=
-CLAUDE_MODEL=claude-sonnet-4-6     # Sonnet for voice TTFT; swap to claude-opus-4-7 if behavior quality is the bottleneck
-DISPATCHER_PHONE=+1XXXXXXXXXX
-PUBLIC_DEFENDER_HOTLINE=+1XXXXXXXXXX
-WEBHOOK_PUBLIC_URL=
+CLAUDE_MODEL=claude-sonnet-4-6  # Sonnet for voice TTFT; swap to claude-opus-4-7 if quality is bottleneck
+
+# Routing fallbacks
+DISPATCHER_PHONE=+1XXXXXXXXXX   # escalate_to_human destination
+PUBLIC_DEFENDER_HOTLINE=+1XXXXXXXXXX  # route_to_public_defender (FR-9 unknown-caller)
+WEBHOOK_PUBLIC_URL=             # ngrok https URL for AgentPhone to reach /webhook
+
+# Tunables
+RON_DEBOUNCE_SECONDS=0.4        # optional; per-call STT-refinement debounce window
 ```
 
 ### 0.3 Team alignment
@@ -111,7 +142,9 @@ WEBHOOK_PUBLIC_URL=
 
 ### 0.4 The CRITICAL preflight experiment — `transferNumber` discovery
 
-**This is the single biggest unknown.** Do it Saturday night or first thing Sunday morning, before anyone starts coding the connection layer. 15 minutes max.
+**RESOLVED 2026-05-17 via AgentPhone docs (after several failed live calls).** The webhook response must be `{"text": "...", "action": "transfer"}` **only — no `transferNumber` field.** AgentPhone reads the destination from the agent record's `transfer_number` field. Set that field via `c.agents.update(agent_id, transfer_number=lawyer.phone)` synchronously inside `connect_to_lawyer` BEFORE returning the webhook response. Sending `transferNumber` in the response causes silent bridge drops (AgentPhone returns 200 OK and the call ends in inactivity instead of `call_transfer`).
+
+The original experiment script below is preserved for historical context but is no longer needed.
 
 ```python
 # scratch_transfer_test.py
