@@ -2,7 +2,7 @@
 
 **Companion to:** [PRD.md](./PRD.md)
 **Status (2026-05-18):** All phases built and verified end-to-end live. The phase-by-phase build narrative below is a historical record of how it was built; the **Current state** section right below captures what's actually shipped. See PRD § 16 ("What changed since draft") for behavior changes.
-**Hackathon:** YC "All My Agents"
+**Hackathon:** YC "Call My Agent"
 
 ---
 

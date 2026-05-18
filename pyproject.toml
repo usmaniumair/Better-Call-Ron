@@ -1,7 +1,7 @@
 [project]
 name = "better-call-ron"
 version = "0.1.0"
-description = "Voice-first AI lawyer concierge built on AgentPhone + Claude. YC All My Agents hackathon."
+description = "Voice-first AI lawyer concierge built on AgentPhone + Claude. YC Call My Agent hackathon."
 requires-python = ">=3.11"
 dependencies = [
   "agentphone",

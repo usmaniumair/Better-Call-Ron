@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen?style=flat-square)](./tests)
 [![Python](https://img.shields.io/badge/python-3.11+-blue?style=flat-square)](./pyproject.toml)
 [![Stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Claude%20Sonnet%204.6-orange?style=flat-square)](#stack)
-[![Built for](https://img.shields.io/badge/built%20for-YC%20All%20My%20Agents-yellow?style=flat-square)](https://www.ycombinator.com/)
+[![Built for](https://img.shields.io/badge/built%20for-YC%20Call%20My%20Agent-yellow?style=flat-square)](https://www.ycombinator.com/)
 
 **[→ Live: better-call-ron-hackathon.vercel.app](https://better-call-ron-hackathon.vercel.app)**
 
@@ -191,6 +191,6 @@ assets/                    Landing page screenshots, pitch slide
 
 <div align="center">
 
-Built for **Y Combinator's "All My Agents" Hackathon** · May 2026
+Built for **Y Combinator's "Call My Agent" Hackathon** · May 2026
 
 </div>

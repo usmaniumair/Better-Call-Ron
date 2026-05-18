@@ -4,7 +4,7 @@ Project guide for Claude Code sessions in this repo. Read this first.
 
 ## What this is
 
-**Better Call Ron** is a voice-first AI concierge for the **lawyer-marketplace vertical**, built for Y Combinator's "All My Agents" hackathon (demo day 2026-05-17). A caller dials one number; Ron authenticates them (caller-ID for pre-registered users), infers urgency from how they talk, and adapts:
+**Better Call Ron** is a voice-first AI concierge for the **lawyer-marketplace vertical**, built for Y Combinator's "Call My Agent" hackathon (demo day 2026-05-17). A caller dials one number; Ron authenticates them (caller-ID for pre-registered users), infers urgency from how they talk, and adapts:
 
 - **Urgent path** — caller signals distress (arrest, in custody, crisis). Ron triages in under 30 seconds, picks an attorney from the curated network, briefs the lawyer, and cold-transfers the live call. Target: under 90 seconds from pickup to attorney on the line. The "one phone call from jail" demo scenario showcases this path — it is **one demo scenario, not the entire product scope**.
 - **Shopper path** — caller is on their own phone, not in crisis, browsing or evaluating lawyers (e.g. divorce, family, general consult). Ron walks them through the marketplace at a normal pace — discovery, fit, scheduling, hand-off.

@@ -5,7 +5,7 @@
 **Status:** Working end-to-end as of 2026-05-18 (verified live). Some FRs evolved past the 2026-05-15 draft — see § "What changed since draft" at the end.
 **Owner:** Umair
 **Last updated:** 2026-05-18
-**Required infrastructure:** [AgentPhone](https://agentphone.ai) (YC mandate for "All My Agents" hackathon), plus AgentMail (lawyer-brief delivery) and BrowserUse (dynamic per-case research)
+**Required infrastructure:** [AgentPhone](https://agentphone.ai) (YC mandate for "Call My Agent" hackathon), plus AgentMail (lawyer-brief delivery) and BrowserUse (dynamic per-case research)
 
 ---
 
