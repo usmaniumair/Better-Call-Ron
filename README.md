@@ -4,6 +4,16 @@ Voice-first AI lawyer concierge. Built for YC's "All My Agents" hackathon.
 
 > *"Hey, this is Ron. How can I help you?"*
 
+<a href="https://better-call-ron-hackathon.vercel.app">
+  <img src="assets/landing-page-hero.png" alt="Better Call Ron — landing page" width="800" />
+</a>
+
+<a href="https://better-call-ron-hackathon.vercel.app">
+  <img src="assets/landing-page-architecture.png" alt="Ron runs the room — system architecture" width="800" />
+</a>
+
+**[→ Live: better-call-ron-hackathon.vercel.app](https://better-call-ron-hackathon.vercel.app)**
+
 ## What this is
 
 A pre-registered user in a legal situation calls one number. Ron (the AI agent) authenticates them via caller-ID (or name + DOB if calling from someone else's phone), triages the situation, and either:
