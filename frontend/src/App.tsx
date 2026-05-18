@@ -17,7 +17,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen bg-brand-light text-brand-dark">
-      <aside className="w-56 shrink-0 border-r border-brand-light-gray bg-brand-light flex flex-col">
+      <aside className="w-48 shrink-0 border-r border-brand-light-gray bg-brand-light flex flex-col">
         <div className="px-5 py-6">
           <div className="font-heading text-xl font-semibold leading-tight">
             Better Call Ron

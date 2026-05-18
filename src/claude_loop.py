@@ -328,7 +328,17 @@ async def run_turn(
         iter_tools: list[dict] = []
         for block in resp.content:
             if block.type == "text" and block.text:
-                text_chunks.append(block.text)
+                # If a prior iteration's tool result already queued a transfer
+                # (connect_to_lawyer / escalate_to_human / route_to_public_defender /
+                # end_call), suppress any further text from going to AgentPhone.
+                # The narration emitted in the SAME turn as the transfer tool is
+                # canonical ("Briefing Haris now..."); any text the model generates
+                # in subsequent iterations after seeing the tool_result is redundant
+                # post-hoc commentary that duplicates the connect line and can
+                # confuse the bridge state machine. iter_text still captures it
+                # for the call log so we have visibility.
+                if pending_transfer is None:
+                    text_chunks.append(block.text)
                 iter_text.append(block.text)
             elif block.type == "tool_use":
                 iter_tools.append({"name": block.name, "input": dict(block.input)})

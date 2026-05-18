@@ -92,3 +92,28 @@ test('full UI walkthrough — screenshot every tab', async ({ page }) => {
     throw new Error(`Console / page / network errors:\n${errors.join('\n')}`)
   }
 })
+
+test('narrow viewport — layout survives squeeze', async ({ page }) => {
+  // Simulates the user's zoomed-in case where the right pane was being
+  // squeezed and "No call selected" got clipped.
+  await page.setViewportSize({ width: 800, height: 700 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'No call selected' })).toBeVisible()
+  await page.screenshot({ path: path.join(SHOTS, 'narrow-01-live.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.waitForFunction(
+    () =>
+      !document.body.textContent?.includes('Loading…') ||
+      document.querySelectorAll('tbody tr').length > 0,
+  )
+  await page.screenshot({ path: path.join(SHOTS, 'narrow-02-history.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Lawyers', exact: true }).click()
+  await page.waitForFunction(
+    () =>
+      !document.body.textContent?.includes('Loading…') ||
+      document.querySelectorAll('tbody tr').length > 0,
+  )
+  await page.screenshot({ path: path.join(SHOTS, 'narrow-03-lawyers.png'), fullPage: true })
+})

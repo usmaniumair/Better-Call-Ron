@@ -14,7 +14,7 @@ interface Props {
 
 export function FilterChips({ value, onChange }: Props) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       {OPTIONS.map((opt) => {
         const selected = opt.value === value
         return (

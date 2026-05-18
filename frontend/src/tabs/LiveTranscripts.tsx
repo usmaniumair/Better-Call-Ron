@@ -98,7 +98,7 @@ export function LiveTranscripts() {
   return (
     <div className="flex h-full">
       {/* Left rail */}
-      <div className="w-64 shrink-0 border-r border-brand-light-gray flex flex-col">
+      <div className="w-56 shrink-0 border-r border-brand-light-gray flex flex-col">
         <div className="p-4 border-b border-brand-light-gray space-y-3">
           <div className="font-heading font-semibold text-sm uppercase tracking-wide text-brand-mid">
             Active calls ({filteredCalls.length})
@@ -146,16 +146,16 @@ export function LiveTranscripts() {
 
       {/* Right pane */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-6 py-4 border-b border-brand-light-gray flex items-center justify-between">
-          <div>
-            <h2 className="font-heading text-lg font-semibold">
+        <div className="px-6 py-4 border-b border-brand-light-gray flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-lg font-semibold truncate">
               {selectedId ? 'Transcript' : 'No call selected'}
             </h2>
             {selectedId && (
-              <div className="font-mono text-xs text-brand-mid">{selectedId}</div>
+              <div className="font-mono text-xs text-brand-mid truncate">{selectedId}</div>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-brand-mid">
+          <div className="shrink-0 flex items-center gap-2 text-xs uppercase tracking-wide text-brand-mid">
             <span
               className={`inline-block w-2 h-2 rounded-full ${
                 wsStatus === 'live'
