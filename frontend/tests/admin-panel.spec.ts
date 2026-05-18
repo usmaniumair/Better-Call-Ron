@@ -32,8 +32,10 @@ test('full UI walkthrough — screenshot every tab', async ({ page }) => {
   await expect(page.getByText('Better Call Ron')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Live Transcripts' })).toBeVisible()
 
-  // Live Transcripts (default tab)
-  await expect(page.getByRole('heading', { name: 'No call selected' })).toBeVisible()
+  // Live Transcripts (default tab) — either empty state or auto-followed an active call.
+  await expect(
+    page.getByRole('heading', { name: /No call selected|Transcript/ }),
+  ).toBeVisible()
   await page.screenshot({ path: path.join(SHOTS, '01-live.png'), fullPage: true })
 
   // History
@@ -98,7 +100,9 @@ test('narrow viewport — layout survives squeeze', async ({ page }) => {
   // squeezed and "No call selected" got clipped.
   await page.setViewportSize({ width: 800, height: 700 })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'No call selected' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: /No call selected|Transcript/ }),
+  ).toBeVisible()
   await page.screenshot({ path: path.join(SHOTS, 'narrow-01-live.png'), fullPage: true })
 
   await page.getByRole('button', { name: 'History' }).click()
