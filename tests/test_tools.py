@@ -230,6 +230,76 @@ def test_do_research_and_email_falls_back_to_generic_on_browser_use_error(monkey
     assert "usa.gov/legal-aid" in captured["text"]
 
 
+def test_notify_emergency_contact_sends_sms_to_each_contact(monkeypatch):
+    captured: list[dict] = []
+
+    def capture(to: str, text: str) -> None:
+        captured.append({"to": to, "text": text})
+
+    monkeypatch.setattr(tools.agentphone_client, "send_sms", capture)
+
+    # u_001 has one emergency contact in the seed.
+    result = tools.notify_emergency_contact(
+        user_id="u_001",
+        message="Hi, this is Ron from Better Call Ron. Umair was just connected with an attorney.",
+    )
+
+    assert "error" not in result
+    assert len(result["notified"]) == len(captured) >= 1
+    # Each notified entry exposes name + relationship for narration.
+    for entry in result["notified"]:
+        assert entry["name"]
+        assert entry["relationship"]
+
+
+def test_notify_emergency_contact_returns_error_when_no_contacts(monkeypatch):
+    # u_002 has emergency_contacts: [] in the seed.
+    def boom(to: str, text: str) -> None:
+        raise AssertionError("send_sms must not be called when no contacts on file")
+
+    monkeypatch.setattr(tools.agentphone_client, "send_sms", boom)
+
+    result = tools.notify_emergency_contact(user_id="u_002", message="anything")
+    assert result == {"error": "no_emergency_contact_on_file", "user_id": "u_002"}
+
+
+def test_notify_emergency_contact_returns_error_for_unknown_user(monkeypatch):
+    def boom(to: str, text: str) -> None:
+        raise AssertionError("send_sms must not be called for unknown user")
+
+    monkeypatch.setattr(tools.agentphone_client, "send_sms", boom)
+
+    result = tools.notify_emergency_contact(user_id="u_zzz", message="anything")
+    assert result == {"error": "unknown_user", "user_id": "u_zzz"}
+
+
+def test_notify_emergency_contact_captures_sms_failure(monkeypatch):
+    def boom(to: str, text: str) -> None:
+        raise RuntimeError("agentphone SMS offline")
+
+    monkeypatch.setattr(tools.agentphone_client, "send_sms", boom)
+
+    result = tools.notify_emergency_contact(user_id="u_001", message="test")
+    # Failure does not raise — it surfaces in the `failed` list so the model
+    # can decide what (if anything) to tell the caller.
+    assert result["notified"] == []
+    assert len(result["failed"]) >= 1
+    assert "agentphone SMS offline" in result["failed"][0]["error"]
+
+
+def test_lookup_user_result_includes_emergency_contacts():
+    # u_001 has a contact; this should surface in the lookup result so the
+    # # Caller identity block (and the model directly) can see whether to use
+    # notify_emergency_contact.
+    result = lookup_user(phone_number=_U_002.phone_numbers[0])  # u_002 has none
+    assert result["emergency_contacts"] == []
+
+    result = lookup_user(phone_number="+12152982128")  # u_001
+    assert isinstance(result["emergency_contacts"], list)
+    assert len(result["emergency_contacts"]) >= 1
+    assert {"name", "relationship", "phone"} <= set(result["emergency_contacts"][0].keys())
+
+
 def test_end_call_returns_hangup_action():
     result = tools.end_call(reason="caller_done")
     assert result["transfer"] == {"action": "hangup"}

@@ -177,6 +177,38 @@ TOOL_DEFS = [
         },
     },
     {
+        "name": "notify_emergency_contact",
+        "description": (
+            "Send an SMS (or iMessage where available) to the caller's emergency "
+            "contact(s) on file. URGENT calls only. Use this in the SAME response "
+            "as connect_to_lawyer so the contact gets a heads-up while the caller "
+            "is being bridged to the lawyer. Returns {notified: [...], failed: [...]}. "
+            "Returns {error: 'no_emergency_contact_on_file'} if the caller has none."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "string",
+                    "description": "user_id from the # Caller identity block or lookup_user.",
+                },
+                "message": {
+                    "type": "string",
+                    "description": (
+                        "1-2 short sentences. Identify yourself as 'Ron from Better Call Ron', "
+                        "name the caller, name the attorney being connected, and say the "
+                        "contact should expect to hear from the caller. Do NOT include "
+                        "the lawyer's phone number; the caller will reach out themselves. "
+                        "Example: \"Hi, this is Ron from Better Call Ron. Umair was just "
+                        "connected with attorney Haris Jalal on an urgent matter and asked "
+                        "me to text you. You'll hear from him as soon as he can call.\""
+                    ),
+                },
+            },
+            "required": ["user_id", "message"],
+        },
+    },
+    {
         "name": "escalate_to_human",
         "description": (
             "Cold-transfer to the human dispatcher. Use when the matcher returns "
@@ -224,6 +256,7 @@ TOOL_IMPLS = {
     "match_lawyers": tools.match_lawyers,
     "connect_to_lawyer": tools.connect_to_lawyer,
     "research_and_email": tools.research_and_email,
+    "notify_emergency_contact": tools.notify_emergency_contact,
     "end_call": tools.end_call,
     "escalate_to_human": tools.escalate_to_human,
     "route_to_public_defender": tools.route_to_public_defender,

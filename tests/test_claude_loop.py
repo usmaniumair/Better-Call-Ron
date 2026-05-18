@@ -16,6 +16,7 @@ def test_tool_def_names_match_tools_module():
         "match_lawyers",
         "connect_to_lawyer",
         "research_and_email",
+        "notify_emergency_contact",
         "end_call",
         "escalate_to_human",
         "route_to_public_defender",
@@ -29,6 +30,7 @@ def test_tool_impls_dispatch_to_real_functions():
     assert TOOL_IMPLS["match_lawyers"] is tools.match_lawyers
     assert TOOL_IMPLS["connect_to_lawyer"] is tools.connect_to_lawyer
     assert TOOL_IMPLS["research_and_email"] is tools.research_and_email
+    assert TOOL_IMPLS["notify_emergency_contact"] is tools.notify_emergency_contact
     assert TOOL_IMPLS["end_call"] is tools.end_call
     assert TOOL_IMPLS["escalate_to_human"] is tools.escalate_to_human
     assert TOOL_IMPLS["route_to_public_defender"] is tools.route_to_public_defender

@@ -33,32 +33,28 @@ def lookup_user(
     name: Optional[str] = None,
     dob: Optional[str] = None,
 ) -> dict:
+    def _serialize(user: User, match_method: str) -> dict:
+        return {
+            "found": True,
+            "user_id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "preferred_language": user.preferred_language,
+            "home_jurisdiction": user.home_jurisdiction.model_dump(),
+            "emergency_contacts": [c.model_dump() for c in user.emergency_contacts],
+            "match_method": match_method,
+        }
+
     if phone_number:
         for user in _USERS:
             if phone_number in user.phone_numbers:
-                return {
-                    "found": True,
-                    "user_id": user.id,
-                    "name": user.name,
-                    "email": user.email,
-                    "preferred_language": user.preferred_language,
-                    "home_jurisdiction": user.home_jurisdiction.model_dump(),
-                    "match_method": "caller_id",
-                }
+                return _serialize(user, "caller_id")
 
     if name and dob:
         target = name.strip().lower()
         for user in _USERS:
             if user.name.lower() == target and user.date_of_birth == dob:
-                return {
-                    "found": True,
-                    "user_id": user.id,
-                    "name": user.name,
-                    "email": user.email,
-                    "preferred_language": user.preferred_language,
-                    "home_jurisdiction": user.home_jurisdiction.model_dump(),
-                    "match_method": "name_dob",
-                }
+                return _serialize(user, "name_dob")
 
     return {"found": False}
 
@@ -294,6 +290,35 @@ def research_and_email(
         "practice_area": practice_area,
         "eta_seconds": 60,
     }
+
+
+def notify_emergency_contact(user_id: str, message: str) -> dict:
+    """SMS the caller's emergency contact(s). URGENT-only — use alongside connect_to_lawyer.
+
+    AgentPhone auto-routes to iMessage when the recipient is on it; falls back
+    to SMS otherwise (per messages.send docs). Returns a per-contact result so
+    the model can narrate "I texted Sara" accurately.
+    """
+    user = _user_by_id(user_id)
+    if user is None:
+        return {"error": "unknown_user", "user_id": user_id}
+    if not user.emergency_contacts:
+        return {"error": "no_emergency_contact_on_file", "user_id": user_id}
+
+    notified: list[dict] = []
+    failed: list[dict] = []
+    for contact in user.emergency_contacts:
+        try:
+            agentphone_client.send_sms(to=contact.phone, text=message)
+            notified.append(
+                {"name": contact.name, "relationship": contact.relationship, "phone": contact.phone}
+            )
+        except Exception as exc:
+            _LOG.exception("send_sms failed for emergency contact %s", contact.name)
+            failed.append(
+                {"name": contact.name, "phone": contact.phone, "error": f"{type(exc).__name__}: {exc}"}
+            )
+    return {"notified": notified, "failed": failed, "message": message}
 
 
 def escalate_to_human(reason: str) -> dict:

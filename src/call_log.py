@@ -26,8 +26,25 @@ def _now() -> str:
 
 
 def _path(call_id: str) -> Path:
+    """Return the on-disk path for `call_id`, finding an existing file if any.
+
+    New files use `<UTC-timestamp>_<call_id>.json` so `ls` and `ls -t` give
+    the same chronological ordering. Old plain-named files (`<call_id>.json`)
+    are still found and reused — no migration needed.
+    """
     safe = _UNSAFE.sub("_", call_id) or "unknown"
-    return _DIR / f"{safe}.json"
+
+    legacy = _DIR / f"{safe}.json"
+    if legacy.exists():
+        return legacy
+    existing = sorted(_DIR.glob(f"*_{safe}.json"))
+    if existing:
+        return existing[0]
+
+    # No file yet — create a new timestamped one. Colons are unsafe on some
+    # filesystems, so use dashes in the time portion.
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    return _DIR / f"{ts}_{safe}.json"
 
 
 def _load_or_init(call_id: str, from_number: str) -> dict:

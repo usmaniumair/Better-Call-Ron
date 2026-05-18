@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
-from . import agentphone_client, call_log, tools
+from . import agentphone_client, call_history, call_log, tools
 from .claude_loop import run_turn
 from .transcript_bus import bus
 
@@ -91,6 +91,14 @@ def _now_iso() -> str:
 
 def _format_identity_block(identity: dict) -> str:
     """Render a pre-resolved caller identity as a system-prompt addendum."""
+    contacts = identity.get("emergency_contacts") or []
+    if contacts:
+        contacts_line = "- emergency_contacts: " + ", ".join(
+            f"{c.get('name')} ({c.get('relationship')})" for c in contacts
+        )
+    else:
+        contacts_line = "- emergency_contacts: none on file"
+
     return (
         "# Caller identity — already resolved from caller ID\n"
         "We've matched this caller's phone number to a registered user. Use these "
@@ -101,6 +109,7 @@ def _format_identity_block(identity: dict) -> str:
         f"- preferred_language: {identity.get('preferred_language')}\n"
         f"- home_jurisdiction (residence — NOT the matter's jurisdiction): "
         f"{identity.get('home_jurisdiction')}\n"
+        f"{contacts_line}\n"
         "\n"
         "**CRITICAL — home_jurisdiction is the caller's home address, NOT where "
         "their legal matter is happening.** People get arrested while traveling. "
@@ -356,3 +365,51 @@ async def transcript_ws(ws: WebSocket, call_id: str) -> None:
 @app.get("/transcript.html")
 def transcript_page() -> FileResponse:
     return FileResponse(_PUBLIC_DIR / "transcript.html")
+
+
+# ─── Admin panel REST API (Phase 1: read-only) ──────────────────────────────
+
+
+@app.get("/api/active-calls")
+def api_active_calls() -> list[dict]:
+    """In-memory active calls, enriched with urgency/status derived from disk."""
+    out: list[dict] = []
+    for call_id, msgs in CALL_STATE.items():
+        record = call_history.load_call(call_id)
+        urgency = record["urgency"] if record else "unclear"
+        status = record["status"] if record else "dropped"
+        started_at = record["started_at"] if record else None
+        out.append(
+            {
+                "call_id": call_id,
+                "turn_count": len(msgs),
+                "started_at": started_at,
+                "urgency": urgency,
+                "status": status,
+            }
+        )
+    out.sort(key=lambda c: c["started_at"] or "", reverse=True)
+    return out
+
+
+@app.get("/api/calls")
+def api_calls(limit: int = 50) -> list[dict]:
+    return call_history.load_recent_calls(limit=limit)
+
+
+@app.get("/api/calls/{call_id}")
+def api_call(call_id: str) -> dict:
+    record = call_history.load_call(call_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="call not found")
+    return record
+
+
+@app.get("/api/users")
+def api_users() -> list[dict]:
+    return [u.model_dump() for u in tools._USERS]
+
+
+@app.get("/api/lawyers")
+def api_lawyers() -> list[dict]:
+    return [lw.model_dump() for lw in tools._LAWYERS]

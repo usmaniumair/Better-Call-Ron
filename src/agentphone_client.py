@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import os
 from typing import Optional
 
 from agentphone import AgentPhone
@@ -20,12 +21,19 @@ def _get_client() -> AgentPhone:
 
 
 def send_sms(to: str, text: str) -> None:
+    """Send SMS/iMessage from the agent. Pins to AGENTPHONE_MESSAGING_NUMBER_ID
+    when set (e.g. the iMessage-capable line) so outbound routing is deterministic;
+    otherwise AgentPhone picks one of the agent's attached numbers."""
     client = _get_client()
-    client.messages.send(
-        agent_id=config.require_env("AGENTPHONE_AGENT_ID"),
-        to_number=to,
-        body=text,
-    )
+    kwargs: dict = {
+        "agent_id": config.require_env("AGENTPHONE_AGENT_ID"),
+        "to_number": to,
+        "body": text,
+    }
+    number_id = os.environ.get("AGENTPHONE_MESSAGING_NUMBER_ID")
+    if number_id:
+        kwargs["number_id"] = number_id
+    client.messages.send(**kwargs)
 
 
 def set_transfer_number(to: str) -> None:

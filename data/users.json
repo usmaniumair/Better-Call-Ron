@@ -8,9 +8,9 @@
     "payment_method_token": "pm_mock_umair_001",
     "emergency_contacts": [
       {
-        "name": "Sara Usmani",
+        "name": "Sydney Usmani",
         "relationship": "spouse",
-        "phone": "<+1XXXXXXXXXX_EMERGENCY_CONTACT>"
+        "phone": "+12152982128"
       }
     ],
     "budget_max_hourly": 600,
